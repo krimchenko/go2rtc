@@ -24,7 +24,7 @@ type Session struct {
 
 func NewSession(cons core.Consumer) *Session {
 	s := &Session{
-		id:   core.RandString(8, 62),
+		id:   core.RandString(32, 62),
 		cons: cons,
 	}
 

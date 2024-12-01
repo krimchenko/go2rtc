@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/tls"
 	"encoding/json"
+	"bytes"
 	"fmt"
 	"net"
 	"net/http"
@@ -23,6 +24,7 @@ func Init() {
 			Listen     string `yaml:"listen"`
 			Username   string `yaml:"username"`
 			Password   string `yaml:"password"`
+			JWTUrl     string `yaml:"jwt_url"`
 			BasePath   string `yaml:"base_path"`
 			StaticDir  string `yaml:"static_dir"`
 			Origin     string `yaml:"origin"`
@@ -62,6 +64,8 @@ func Init() {
 
 	if cfg.Mod.Username != "" {
 		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, Handler) // 2nd
+	} else if cfg.Mod.JWTUrl != "" {
+		Handler = jwtAuth(cfg.Mod.JWTUrl, Handler)
 	}
 
 	if log.Trace().Enabled() {
@@ -208,6 +212,63 @@ func middlewareAuth(username, password string, next http.Handler) http.Handler {
 			}
 		}
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+func jwtAuth(jwt_url string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Info().Msgf("[auth] %s %s %s", r.Method, r.URL, r.RemoteAddr)
+		if !strings.HasPrefix(r.URL.Path, "/api/hls/") {
+			if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
+				reqToken := ""
+				bearerToken := r.Header.Get("Authorization")
+
+				if strings.Contains(bearerToken, "Bearer ") {
+					reqToken = strings.Split(bearerToken, " ")[1]
+				}
+				if len(reqToken) < 6 {
+					reqToken = r.URL.Query().Get("auth")
+				}
+				if len(reqToken) > 5 {
+
+					//fmt.Sprintf("%#v", json_data)
+					var jsonData = []byte(`{"token": "`+reqToken+`"}`)
+
+					//if err != nil {
+					//	w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
+					//	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					//	return
+					//}
+
+					resp, err := http.Post(jwt_url, "application/json", bytes.NewBuffer(jsonData))
+
+					if err != nil {
+						w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
+						http.Error(w, "Unauthorized", http.StatusUnauthorized)
+						return
+					}
+
+					defer resp.Body.Close()
+
+					if resp.StatusCode != 200 {
+						w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
+						http.Error(w, "Unauthorized", http.StatusUnauthorized)
+						return
+					}
+
+					//var res map[string]interface{}
+
+					//json.NewDecoder(resp.Body).Decode(&res)
+
+					//fmt.Println(res["json"])
+				} else {
+					w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
 }
