@@ -59,7 +59,11 @@ func (m *Movie) WriteMovieHeader() {
 	m.Skip(4)           // create time
 	m.Skip(4)           // modify time
 	m.WriteUint32(1000) // time scale
-	m.Skip(4)           // duration
+	if m.duration > 0 {
+		m.WriteUint32(m.duration)
+	} else {
+		m.Skip(4) // duration
+	}
 	m.WriteFloat32(1)   // preferred rate
 	m.WriteFloat16(1)   // preferred volume
 	m.Skip(10)          // reserved

@@ -1,0 +1,11 @@
+record:
+  basePath: /mnt/recordings
+  numSegments: 5
+  segmentDuration: 10s
+  timezone: Asia/Novosibirsk
+  finalizeScriptPath: /scripts/ffmpeg_finalize.py
+
+streams:
+  guid1234aoaokek1337:
+    device_name: Восход, 26/1 (выз.  панель)
+    url: rtsp://stream:554

@@ -6,6 +6,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/bubble"
+    "github.com/AlexxIT/go2rtc/internal/cronjobs"                                              
 	"github.com/AlexxIT/go2rtc/internal/debug"
 	"github.com/AlexxIT/go2rtc/internal/doorbird"
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
@@ -28,7 +29,8 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/nest"
 	"github.com/AlexxIT/go2rtc/internal/ngrok"
 	"github.com/AlexxIT/go2rtc/internal/onvif"
-	"github.com/AlexxIT/go2rtc/internal/ring"
+	"github.com/AlexxIT/go2rtc/internal/record"
+    "github.com/AlexxIT/go2rtc/internal/ring"
 	"github.com/AlexxIT/go2rtc/internal/roborock"
 	"github.com/AlexxIT/go2rtc/internal/rtmp"
 	"github.com/AlexxIT/go2rtc/internal/rtsp"
@@ -57,6 +59,9 @@ func main() {
 
 	rtsp.Init()   // rtsp source, RTSP server
 	webrtc.Init() // webrtc source, WebRTC server
+
+	record.Init()   // record module
+	cronjobs.Init() // cron jobs
 
 	// 3. Main API
 
