@@ -46,31 +46,22 @@ func Init() {
 		log.Fatal().Msg("record.numSegments is invalid")
 	}
 
-	for streamName, item := range cfg.Streams {
-		switch item := item.(type) {
-		case map[string]any:
-			deviceName, ok := item["device_name"].(string)
-			if !ok {
-				continue
-			}
-			deviceName = strings.ReplaceAll(deviceName, "/", "-")
-			gateAddress := strings.Split(deviceName, " (")[0] // встретимся как попадется адрес со скобками
-			seg, err := NewSegments(
-				segmentDuration,
-				numSegments,
-				fmt.Sprintf("%s/%s/%s", basePath, gateAddress, deviceName),
-				timezone,
-				streamName,
-			)
-			if err != nil {
-				log.Fatal().Err(err).Msg("failed to create segments")
-			}
-			recordings[streamName] = seg
+	for streamName := range cfg.Streams {
+		deviceName := strings.ReplaceAll(streamName, "/", "-")
+		seg, err := NewSegments(
+			segmentDuration,
+			numSegments,
+			fmt.Sprintf("%s/%s", basePath, deviceName),
+			timezone,
+			streamName,
+		)
 
-			go seg.Record()
-			time.Sleep(time.Second * 2) // sleep couple seconds so streams won't switch segments all at the same time
-		default:
-			continue
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to create segments")
 		}
+		recordings[streamName] = seg
+
+		go seg.Record()
+		time.Sleep(time.Second * 2) // sleep couple seconds so streams won't switch segments all at the same time
 	}
 }
