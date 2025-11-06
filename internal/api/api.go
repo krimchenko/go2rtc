@@ -1,9 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"bytes"
 	"fmt"
 	"net"
 	"net/http"
@@ -25,6 +25,8 @@ func Init() {
 			Username   string `yaml:"username"`
 			Password   string `yaml:"password"`
 			JWTUrl     string `yaml:"jwt_url"`
+			JWTMethod  string `yaml:"jwt_method"`
+			JWTBody    string `yaml:"jwt_body"`
 			BasePath   string `yaml:"base_path"`
 			StaticDir  string `yaml:"static_dir"`
 			Origin     string `yaml:"origin"`
@@ -65,7 +67,7 @@ func Init() {
 	if cfg.Mod.Username != "" {
 		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, Handler) // 2nd
 	} else if cfg.Mod.JWTUrl != "" {
-		Handler = jwtAuth(cfg.Mod.JWTUrl, Handler)
+		Handler = jwtAuth(cfg.Mod.JWTUrl, Handler, cfg.Mod.JWTMethod, cfg.Mod.JWTBody)
 	}
 
 	if log.Trace().Enabled() {
@@ -214,7 +216,7 @@ func middlewareAuth(username, password string, next http.Handler) http.Handler {
 	})
 }
 
-func jwtAuth(jwt_url string, next http.Handler) http.Handler {
+func jwtAuth(jwt_url string, next http.Handler, method, body string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msgf("[auth] %s %s %s", r.Method, r.URL, r.RemoteAddr)
 		if !strings.HasPrefix(r.URL.Path, "/api/hls/") {
@@ -231,7 +233,7 @@ func jwtAuth(jwt_url string, next http.Handler) http.Handler {
 				if len(reqToken) > 5 {
 
 					//fmt.Sprintf("%#v", json_data)
-					var jsonData = []byte(`{"token": "`+reqToken+`"}`)
+					var jsonData = []byte(`{"token": "` + reqToken + `"}`)
 
 					//if err != nil {
 					//	w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
@@ -239,7 +241,14 @@ func jwtAuth(jwt_url string, next http.Handler) http.Handler {
 					//	return
 					//}
 
-					resp, err := http.Post(jwt_url, "application/json", bytes.NewBuffer(jsonData))
+					var resp *http.Response
+					var err error
+
+					if method == "POST" {
+						resp, err = http.Post(jwt_url, "application/json", bytes.NewBuffer(jsonData))
+					} else {
+						resp, err = http.Get(jwt_url)
+					}
 
 					if err != nil {
 						w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
