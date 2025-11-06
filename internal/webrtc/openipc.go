@@ -3,8 +3,10 @@ package webrtc
 import (
 	"encoding/json"
 	"errors"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"io"
 	"net/url"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/webrtc"
@@ -79,6 +81,7 @@ func openIPCClient(rawURL string, query url.Values) (core.Producer, error) {
 			case pion.PeerConnectionStateConnected:
 				connState.Done(nil)
 			default:
+				app.RecordEvent(time.Now(), "webrtc-stop", srcName, remoteAddr, "")
 				connState.Done(errors.New("webrtc: " + msg.String()))
 			}
 		}
@@ -145,7 +148,7 @@ func openIPCClient(rawURL string, query url.Values) (core.Producer, error) {
 	if err = connState.Wait(); err != nil {
 		return nil, err
 	}
-
+	app.RecordEvent(time.Now(), "webrtc-start", srcName, remoteAddr, "")
 	return prod, nil
 }
 

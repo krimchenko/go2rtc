@@ -3,6 +3,7 @@ package webrtc
 import (
 	"encoding/base64"
 	"encoding/json"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"io"
 	"net/http"
 	"strconv"
@@ -218,11 +219,13 @@ func inputWebRTC(w http.ResponseWriter, r *http.Request) {
 			if msg == pion.PeerConnectionStateClosed {
 				stream.RemoveProducer(prod)
 				delete(sessions, id)
+				app.RecordEvent(time.Now(), "webrtc-stop", srcName, remoteAddr, "")
 			}
 		}
 	})
 
 	stream.AddProducer(prod)
+	app.RecordEvent(time.Now(), "webrtc-start", srcName, remoteAddr, "")
 
 	w.Header().Set("Content-Type", MimeSDP)
 	w.Header().Set("Location", "webrtc?id="+id)

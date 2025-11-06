@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"io"
 	"net/http"
 	"net/url"
@@ -106,6 +107,7 @@ func kinesisClient(
 			case pion.PeerConnectionStateConnected:
 				connState.Done(nil)
 			default:
+				app.RecordEvent(time.Now(), "webrtc-stop", srcName, remoteAddr, "")
 				connState.Done(errors.New("webrtc: " + msg.String()))
 			}
 		}
@@ -193,7 +195,7 @@ func kinesisClient(
 	if err = connState.Wait(); err != nil {
 		return nil, err
 	}
-
+	app.RecordEvent(time.Now(), "webrtc-start", srcName, remoteAddr, "")
 	return prod, nil
 }
 

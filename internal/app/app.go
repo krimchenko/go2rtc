@@ -68,6 +68,7 @@ func Init() {
 
 	initConfig(config)
 	initLogger()
+	initEventer()
 
 	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
 	Logger.Info().Str("version", Version).Str("platform", platform).Str("revision", revision).Msg("go2rtc")

@@ -40,11 +40,13 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/v4l2"
 	"github.com/AlexxIT/go2rtc/internal/webrtc"
 	"github.com/AlexxIT/go2rtc/internal/webtorrent"
+	"github.com/AlexxIT/go2rtc/internal/wyoming"
+	"github.com/AlexxIT/go2rtc/internal/yandex"
 	"github.com/AlexxIT/go2rtc/pkg/shell"
 )
 
 func main() {
-	app.Version = "1.9.9"
+	app.Version = "1.9.11"
 
 	// 1. Core modules: app, api/ws, streams
 
@@ -74,6 +76,7 @@ func main() {
 	hass.Init()       // hass source, Hass API server
 	onvif.Init()      // onvif source, ONVIF API server
 	webtorrent.Init() // webtorrent source, WebTorrent module
+	wyoming.Init()
 
 	// 5. Other sources
 
@@ -99,6 +102,7 @@ func main() {
 	alsa.Init()     // alsa source
 	flussonic.Init()
 	eseecloud.Init()
+	yandex.Init()
 
 	// 6. Helper modules
 

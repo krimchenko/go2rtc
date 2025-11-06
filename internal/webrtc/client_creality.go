@@ -3,6 +3,7 @@ package webrtc
 import (
 	"encoding/base64"
 	"encoding/json"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"io"
 	"net/http"
 	"strings"
@@ -72,7 +73,7 @@ func crealityClient(url string) (core.Producer, error) {
 	if err = prod.SetAnswer(answer); err != nil {
 		return nil, err
 	}
-
+	app.RecordEvent(time.Now(), "webrtc-start", srcName, remoteAddr, "")
 	return prod, nil
 }
 
