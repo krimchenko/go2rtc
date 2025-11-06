@@ -3,6 +3,7 @@ package webrtc
 import (
 	"encoding/base64"
 	"errors"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"io"
 	"net/http"
 	"net/url"
@@ -113,6 +114,7 @@ func go2rtcClient(url string) (core.Producer, error) {
 			case pion.PeerConnectionStateConnected:
 				connState.Done(nil)
 			default:
+				app.RecordEvent(time.Now(), "webrtc-stop", srcName, remoteAddr, "")
 				connState.Done(errors.New("webrtc: " + msg.String()))
 			}
 		}
@@ -176,7 +178,7 @@ func go2rtcClient(url string) (core.Producer, error) {
 	if err = connState.Wait(); err != nil {
 		return nil, err
 	}
-
+	app.RecordEvent(time.Now(), "webrtc-start", srcName, remoteAddr, "")
 	return prod, nil
 }
 
@@ -228,7 +230,7 @@ func whepClient(url string) (core.Producer, error) {
 	if err = prod.SetAnswer(string(answer)); err != nil {
 		return nil, err
 	}
-
+	app.RecordEvent(time.Now(), "webrtc-start", srcName, remoteAddr, "")
 	return prod, nil
 }
 

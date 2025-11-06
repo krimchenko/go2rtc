@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/AlexxIT/go2rtc/internal/app"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/tcp"
@@ -215,6 +217,6 @@ func milestoneClient(rawURL string, query url.Values) (core.Producer, error) {
 	if err = mc.SetAnswer(answer); err != nil {
 		return nil, err
 	}
-
+	app.RecordEvent(time.Now(), "webrtc-start", srcName, remoteAddr, "")
 	return prod, nil
 }

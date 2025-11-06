@@ -3,6 +3,7 @@ package webrtc
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
@@ -89,6 +90,9 @@ var log zerolog.Logger
 
 var PeerConnection func(active bool) (*pion.PeerConnection, error)
 
+var srcName string
+var remoteAddr string
+
 func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	var stream *streams.Stream
 	var mode core.Mode
@@ -98,6 +102,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 		stream = streams.GetOrPatch(query)
 		mode = core.ModePassiveConsumer
 		log.Debug().Str("src", name).Msg("[webrtc] new consumer")
+		srcName = name
 	} else if name = query.Get("dst"); name != "" {
 		stream = streams.Get(name)
 		mode = core.ModePassiveProducer
@@ -146,6 +151,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 	conn.Mode = mode
 	conn.Protocol = "ws"
 	conn.UserAgent = tr.Request.UserAgent()
+	remoteAddr = tr.Request.RemoteAddr
 	conn.Listen(func(msg any) {
 		switch msg := msg.(type) {
 		case pion.PeerConnectionState:
@@ -158,6 +164,8 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 			case core.ModePassiveProducer:
 				stream.RemoveProducer(conn)
 			}
+
+			app.RecordEvent(time.Now(), "webrtc-stop", srcName, remoteAddr, "")
 
 		case *pion.ICECandidate:
 			if !FilterCandidate(msg) {
@@ -211,6 +219,8 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 
 	asyncCandidates(tr, conn)
 
+	app.RecordEvent(time.Now(), "webrtc-start", srcName, remoteAddr, "")
+
 	return nil
 }
 
@@ -237,6 +247,7 @@ func ExchangeSDP(stream *streams.Stream, offer, desc, userAgent string) (answer 
 			} else {
 				stream.RemoveProducer(conn)
 			}
+			app.RecordEvent(time.Now(), "webrtc-start", srcName, remoteAddr, "")
 		}
 	})
 
