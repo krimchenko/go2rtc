@@ -1,12 +1,12 @@
 package api
 
 import (
-	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -219,61 +219,53 @@ func middlewareAuth(username, password string, next http.Handler) http.Handler {
 func jwtAuth(jwt_url string, next http.Handler, method, body string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msgf("[auth] %s %s %s", r.Method, r.URL, r.RemoteAddr)
-		if !strings.HasPrefix(r.URL.Path, "/api/hls/") {
-			if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
-				reqToken := ""
-				bearerToken := r.Header.Get("Authorization")
+		if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
+			reqToken := ""
+			bearerToken := r.Header.Get("Authorization")
 
-				if strings.Contains(bearerToken, "Bearer ") {
-					reqToken = strings.Split(bearerToken, " ")[1]
-				}
-				if len(reqToken) < 6 {
-					reqToken = r.URL.Query().Get("auth")
-				}
-				if len(reqToken) > 5 {
+			if strings.Contains(bearerToken, "Bearer ") {
+				reqToken = strings.Split(bearerToken, " ")[1]
+			}
+			if len(reqToken) < 6 {
+				reqToken = r.URL.Query().Get("auth")
+			}
+			if len(reqToken) > 5 {
 
-					//fmt.Sprintf("%#v", json_data)
-					var jsonData = []byte(`{"token": "` + reqToken + `"}`)
+				jwt_url := strings.ReplaceAll(jwt_url, "%jwt", url.QueryEscape(reqToken))
 
-					//if err != nil {
-					//	w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
-					//	http.Error(w, "Unauthorized", http.StatusUnauthorized)
-					//	return
-					//}
+				var resp *http.Response
+				var err error
 
-					var resp *http.Response
-					var err error
-
-					if method == "POST" {
-						resp, err = http.Post(jwt_url, "application/json", bytes.NewBuffer(jsonData))
-					} else {
-						resp, err = http.Get(jwt_url)
-					}
-
-					if err != nil {
-						w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
-						http.Error(w, "Unauthorized", http.StatusUnauthorized)
-						return
-					}
-
-					defer resp.Body.Close()
-
-					if resp.StatusCode != 200 {
-						w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
-						http.Error(w, "Unauthorized", http.StatusUnauthorized)
-						return
-					}
-
-					//var res map[string]interface{}
-
-					//json.NewDecoder(resp.Body).Decode(&res)
-
-					//fmt.Println(res["json"])
+				if method == "POST" {
+					body := strings.ReplaceAll(body, "%jwt", reqToken)
+					resp, err = http.Post(jwt_url, "application/json", strings.NewReader(body))
 				} else {
+					resp, err = http.Get(jwt_url)
+				}
+
+				if err != nil {
 					w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
+
+				defer resp.Body.Close()
+
+				if resp.StatusCode != 200 {
+					w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+
+				//var res map[string]interface{}
+
+				//json.NewDecoder(resp.Body).Decode(&res)
+
+				//fmt.Println(res["json"])
+			} else {
+				w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
 			}
 		}
 		next.ServeHTTP(w, r)
