@@ -26,7 +26,8 @@ func Init() {
 
 	basePath, ok := cfg.Record["basePath"].(string)
 	if !ok {
-		log.Fatal().Msg("record.basePath is invalid")
+		return
+		//log.Fatal().Msg("record.basePath is invalid")
 	}
 
 	segmentDurationStr, ok := cfg.Record["segmentDuration"].(string)
