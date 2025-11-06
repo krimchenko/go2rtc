@@ -219,16 +219,8 @@ func middlewareAuth(username, password string, next http.Handler) http.Handler {
 func jwtAuth(jwt_url string, next http.Handler, method, body string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msgf("[auth] %s %s %s", r.Method, r.URL, r.RemoteAddr)
-		if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
-			reqToken := ""
-			bearerToken := r.Header.Get("Authorization")
-
-			if strings.Contains(bearerToken, "Bearer ") {
-				reqToken = strings.Split(bearerToken, " ")[1]
-			}
-			if len(reqToken) < 6 {
-				reqToken = r.URL.Query().Get("auth")
-			}
+		if !strings.HasPrefix(r.RemoteAddr, "-127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
+			reqToken := app.GetAuthToken(r)
 			if len(reqToken) > 5 {
 
 				jwt_url := strings.ReplaceAll(jwt_url, "%jwt", url.QueryEscape(reqToken))

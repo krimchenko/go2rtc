@@ -3,10 +3,12 @@ package app
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
 	"runtime/debug"
+	"strings"
 )
 
 var (
@@ -76,6 +78,18 @@ func Init() {
 	if ConfigPath != "" {
 		Logger.Info().Str("path", ConfigPath).Msg("config")
 	}
+}
+
+func GetAuthToken(r *http.Request) string {
+	token := ""
+	bearerToken := r.Header.Get("Authorization")
+	if strings.Contains(bearerToken, "Bearer ") {
+		token = strings.Split(bearerToken, " ")[1]
+	}
+	if len(token) < 6 {
+		token = r.URL.Query().Get("auth")
+	}
+	return token
 }
 
 func readRevisionTime() (revision, vcsTime string) {
