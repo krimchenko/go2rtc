@@ -2,6 +2,8 @@ package mp4
 
 import (
 	"errors"
+	"github.com/AlexxIT/go2rtc/internal/app"
+	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/api"
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
@@ -11,6 +13,13 @@ import (
 )
 
 func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
+	srcName := ""
+
+	query := tr.Request.URL.Query()
+	if name := query.Get("src"); name != "" {
+		srcName = name
+	}
+
 	stream := streams.GetOrPatch(tr.Request.URL.Query())
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
@@ -37,7 +46,10 @@ func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 
 	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)
+		app.RecordEvent(time.Now(), "webrtc-stop", srcName, tr.Request.RemoteAddr, "")
 	})
+
+	app.RecordEvent(time.Now(), "webrtc-start", srcName, tr.Request.RemoteAddr, "")
 
 	return nil
 }
