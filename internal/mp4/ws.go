@@ -46,10 +46,10 @@ func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 
 	tr.OnClose(func() {
 		stream.RemoveConsumer(cons)
-		app.RecordEvent(time.Now(), "mse-stop", srcName, tr.Request.RemoteAddr, app.GetAuthToken(tr.Request))
+		app.RecordEvent(time.Now(), "mse-stop", srcName, app.GetRequestAddr(tr.Request), app.GetAuthToken(tr.Request))
 	})
 
-	app.RecordEvent(time.Now(), "mse-start", srcName, tr.Request.RemoteAddr, app.GetAuthToken(tr.Request))
+	app.RecordEvent(time.Now(), "mse-start", srcName, app.GetRequestAddr(tr.Request), app.GetAuthToken(tr.Request))
 
 	return nil
 }
