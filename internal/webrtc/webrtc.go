@@ -165,7 +165,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 				stream.RemoveProducer(conn)
 			}
 
-			app.RecordEvent(time.Now(), "webrtc-stop", srcName, remoteAddr, "")
+			app.RecordEvent(time.Now(), "webrtc-stop", srcName, remoteAddr, app.GetAuthToken(tr.Request))
 
 		case *pion.ICECandidate:
 			if !FilterCandidate(msg) {
@@ -219,7 +219,7 @@ func asyncHandler(tr *ws.Transport, msg *ws.Message) (err error) {
 
 	asyncCandidates(tr, conn)
 
-	app.RecordEvent(time.Now(), "webrtc-start", srcName, remoteAddr, "")
+	app.RecordEvent(time.Now(), "webrtc-start", srcName, remoteAddr, app.GetAuthToken(tr.Request))
 
 	return nil
 }
