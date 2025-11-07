@@ -3,6 +3,7 @@ package app
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
@@ -77,6 +78,13 @@ func Init() {
 	if ConfigPath != "" {
 		Logger.Info().Str("path", ConfigPath).Msg("config")
 	}
+}
+
+func GetRequestAddr(r *http.Request) string {
+	if len(r.Header.Get("X-Real-IP")) > 0 {
+		return r.Header.Get("X-Real-IP")
+	}
+	return r.RemoteAddr
 }
 
 func readRevisionTime() (revision, vcsTime string) {
