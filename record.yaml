@@ -1,5 +1,5 @@
 record:
-  basePath: /mnt/recordings
+  basePath: '/mnt/recordings/{{.YEAR}}/{{.MONTH}}/{{.DAY}}/{{.ID}}'
   numSegments: 5
   segmentDuration: 10s
   timezone: Asia/Novosibirsk
