@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +26,7 @@ func Init() {
 			Username   string `yaml:"username"`
 			Password   string `yaml:"password"`
 			JWTUrl     string `yaml:"jwt_url"`
+			LocalAuth  bool   `yaml:"local_auth"`
 			BasePath   string `yaml:"base_path"`
 			StaticDir  string `yaml:"static_dir"`
 			Origin     string `yaml:"origin"`
@@ -32,6 +34,8 @@ func Init() {
 			TLSCert    string `yaml:"tls_cert"`
 			TLSKey     string `yaml:"tls_key"`
 			UnixListen string `yaml:"unix_listen"`
+
+			AllowPaths []string `yaml:"allow_paths"`
 		} `yaml:"api"`
 	}
 
@@ -45,6 +49,7 @@ func Init() {
 		return
 	}
 
+	allowPaths = cfg.Mod.AllowPaths
 	basePath = cfg.Mod.BasePath
 	log = app.GetLogger("api")
 
@@ -63,7 +68,7 @@ func Init() {
 	}
 
 	if cfg.Mod.Username != "" {
-		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, Handler) // 2nd
+		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, cfg.Mod.LocalAuth, Handler) // 2nd
 	} else if cfg.Mod.JWTUrl != "" {
 		Handler = jwtAuth(cfg.Mod.JWTUrl, Handler)
 	}
@@ -156,6 +161,10 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 	if len(pattern) == 0 || pattern[0] != '/' {
 		pattern = basePath + "/" + pattern
 	}
+	if allowPaths != nil && !slices.Contains(allowPaths, pattern) {
+		log.Trace().Str("path", pattern).Msg("[api] ignore path not in allow_paths")
+		return
+	}
 	log.Trace().Str("path", pattern).Msg("[api] register path")
 	http.HandleFunc(pattern, handler)
 }
@@ -189,6 +198,7 @@ func Response(w http.ResponseWriter, body any, contentType string) {
 
 const StreamNotFound = "stream not found"
 
+var allowPaths []string
 var basePath string
 var log zerolog.Logger
 
@@ -199,9 +209,13 @@ func middlewareLog(next http.Handler) http.Handler {
 	})
 }
 
-func middlewareAuth(username, password string, next http.Handler) http.Handler {
+func isLoopback(remoteAddr string) bool {
+	return strings.HasPrefix(remoteAddr, "127.") || strings.HasPrefix(remoteAddr, "[::1]") || remoteAddr == "@"
+}
+
+func middlewareAuth(username, password string, localAuth bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
+		if localAuth || !isLoopback(r.RemoteAddr) {
 			user, pass, ok := r.BasicAuth()
 			if !ok || user != username || pass != password {
 				w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
