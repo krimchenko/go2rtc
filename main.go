@@ -8,7 +8,7 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/api/ws"
 	"github.com/AlexxIT/go2rtc/internal/app"
 	"github.com/AlexxIT/go2rtc/internal/bubble"
-    "github.com/AlexxIT/go2rtc/internal/cronjobs"                                              
+	"github.com/AlexxIT/go2rtc/internal/cronjobs"
 	"github.com/AlexxIT/go2rtc/internal/debug"
 	"github.com/AlexxIT/go2rtc/internal/doorbird"
 	"github.com/AlexxIT/go2rtc/internal/dvrip"
@@ -72,6 +72,7 @@ func main() {
 		{"rtsp", rtsp.Init},     // rtsp source, RTSP server
 		{"webrtc", webrtc.Init}, // webrtc source, WebRTC server
         {"record", record.Init}, // record module
+		{"cronjobs", cronjobs.Init},
 		// Main API
 		{"mp4", mp4.Init},     // MP4 API
 		{"hls", hls.Init},     // HLS API
