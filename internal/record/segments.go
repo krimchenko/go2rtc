@@ -61,7 +61,14 @@ func (s *Segments) Write(b []byte) (n int, err error) {
 }
 
 func (s *Segments) Record() {
-	s.prepareNextFile()
+	for {
+		if err := s.prepareNextFile(); err == nil {
+			break
+		} else {
+			log.Error().Err(err).Msg("failed to open new segment file, retrying...")
+		}
+		time.Sleep(30 * time.Second)
+	}
 
 	s.cons = mp4.NewConsumer(s.medias)
 
@@ -93,9 +100,7 @@ func (s *Segments) switchFile() {
 	}()
 }
 
-func (s *Segments) prepareNextFile() {
-	var err error
-
+func (s *Segments) prepareNextFile() error {
 	now := time.Now().In(s.filenameTZ)
 	filename := fmt.Sprintf(
 		"%s/.%s_%s_raw.mp4",
@@ -109,7 +114,7 @@ func (s *Segments) prepareNextFile() {
 		0644,
 	)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to open new segment file")
+		return err
 	}
 
 	next := s.current + 1
@@ -120,18 +125,21 @@ func (s *Segments) prepareNextFile() {
 		// file may be finalized by some cronjob, so look for clean filename
 		oldFilename := strings.Replace(strings.Replace(s.files[next].Name(), "/.", "/", 1), "_raw.mp4", ".mp4", 1)
 		go func() {
-			err = os.Remove(oldFilename)
-			if err != nil {
+			if err := os.Remove(oldFilename); err != nil {
 				log.Error().Err(err).Msg("failed to remove old segment file")
 			}
 		}()
 	}
 	s.files[next] = newFile
+	return nil
 }
 
 func (s *Segments) scheduleSwitch() {
 	for range time.NewTicker(s.segmentDuration).C {
-		s.prepareNextFile()
+		if err := s.prepareNextFile(); err != nil {
+			log.Error().Err(err).Msg("failed to open new segment file")
+			continue
+		}
 		s.cons.ResetMuxer() // trigger the muxer to send mp4 magic number
 	}
 }
