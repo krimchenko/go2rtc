@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"text/template"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -231,22 +232,43 @@ func middlewareAuth(username, password string, localAuth bool, next http.Handler
 }
 
 func jwtAuth(jwt_url string, next http.Handler, method, body string) http.Handler {
+	type templateData struct {
+		JWT string
+	}
+
+	urlTemplate, err := template.New("jwt_url").Parse(jwt_url)
+	if err != nil {
+		log.Fatal().Err(err).Msg("invalid api.jwt_url template")
+	}
+	bodyTemplate, err := template.New("jwt_body").Parse(body)
+	if err != nil {
+		log.Fatal().Err(err).Msg("invalid api.jwt_body template")
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msgf("[auth] %s %s %s", r.Method, r.URL, r.RemoteAddr)
 		if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
 			reqToken := app.GetAuthToken(r)
 			if len(reqToken) > 5 {
 
-				jwt_url := strings.ReplaceAll(jwt_url, "%jwt", url.QueryEscape(reqToken))
+				var requestURL strings.Builder
+				if err := urlTemplate.Execute(&requestURL, templateData{JWT: url.QueryEscape(reqToken)}); err != nil {
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
 
 				var resp *http.Response
 				var err error
 
 				if method == "POST" {
-					body := strings.ReplaceAll(body, "%jwt", reqToken)
-					resp, err = http.Post(jwt_url, "application/json", strings.NewReader(body))
+					var requestBody strings.Builder
+					if err := bodyTemplate.Execute(&requestBody, templateData{JWT: reqToken}); err != nil {
+						http.Error(w, "Unauthorized", http.StatusUnauthorized)
+						return
+					}
+					resp, err = http.Post(requestURL.String(), "application/json", strings.NewReader(requestBody.String()))
 				} else {
-					resp, err = http.Get(jwt_url)
+					resp, err = http.Get(requestURL.String())
 				}
 
 				if err != nil {

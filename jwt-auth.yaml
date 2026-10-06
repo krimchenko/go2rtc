@@ -1,0 +1,4 @@
+api:
+  jwt_url: 'https://auth.example.com/validate?token={{.JWT}}'
+  jwt_method: POST
+  jwt_body: '{"token":"{{.JWT}}"}'
