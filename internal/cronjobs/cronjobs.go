@@ -1,45 +1,30 @@
 package cronjobs
 
 import (
-    "fmt"
+	"fmt"
 
-    "github.com/AlexxIT/go2rtc/internal/app"
-    "github.com/AlexxIT/go2rtc/internal/record"
-    "github.com/robfig/cron"
+	"github.com/AlexxIT/go2rtc/internal/app"
+	"github.com/AlexxIT/go2rtc/internal/record"
+	"github.com/robfig/cron"
 )
 
 func Init() {
-    var cfg struct {
-        Record map[string]any `yaml:"record"`
-    }
-    app.LoadConfig(&cfg)
-    
-    fmt.Println("[test] cronjob init")
+	var cfg struct {
+		Record map[string]any `yaml:"record"`
+	}
+	app.LoadConfig(&cfg)
 
-    if cfg.Record == nil {
-        fmt.Println("[test] cronjob return")
-        return
-    }
-    
-    fmt.Println("[test] cronjob if")
-    
-    if cfg.Record["finalizeScriptPath"] != "" && cfg.Record["segmentDuration"] != "" {
-        fmt.Println("[test] cronjob cron new")
-        c := cron.New()
-        c.Start()
-        fmt.Println("[test] cronjob cron if finalizeScriptPath")
-        if cfg.Record["finalizeScriptPath"] != "" {
-            fmt.Println("[test] cronjob cron add finalizeScriptPath")
-            c.AddFunc(
-                fmt.Sprintf("@every %s", cfg.Record["segmentDuration"].(string)),
-                record.FFmpegFinalizeRecordings,
-            )
-        }
-        
-        fmt.Println("[test] cronjob cron if segmentDuration")
-        if cfg.Record["segmentDuration"] != "" {
-            fmt.Println("[test] cronjob cron add segmentDuration")
-            c.AddFunc("* */5 * * * *", record.RemoveDanglingRecodings)
-        }
-    }
+	segmentDuration, ok := cfg.Record["segmentDuration"].(string)
+	if !ok || segmentDuration == "" {
+		return
+	}
+
+	c := cron.New()
+	if finalizeScriptPath, ok := cfg.Record["finalizeScriptPath"].(string); ok && finalizeScriptPath != "" {
+		c.AddFunc(fmt.Sprintf("@every %s", segmentDuration), record.FFmpegFinalizeRecordings)
+	}
+	if numSegments, ok := cfg.Record["numSegments"].(int); ok && numSegments > 0 {
+		c.AddFunc("* */5 * * * *", record.RemoveDanglingRecodings)
+	}
+	c.Start()
 }

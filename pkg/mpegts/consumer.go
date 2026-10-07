@@ -116,6 +116,11 @@ func (c *Consumer) WriteTo(wr io.Writer) (int64, error) {
 	return c.wr.WriteTo(wr)
 }
 
+func (c *Consumer) WriteHeader() error {
+	_, err := c.wr.Write(c.muxer.GetHeader())
+	return err
+}
+
 //func TimestampFromRTP(rtp *rtp.Packet, codec *core.Codec) {
 //	if codec.ClockRate == ClockRate {
 //		return

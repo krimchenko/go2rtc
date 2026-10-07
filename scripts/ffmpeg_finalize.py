@@ -1,46 +1,37 @@
 #!/usr/bin/env python3
 
-import subprocess
 import os
+import subprocess
 import sys
+import time
 
-BASE_PATH = sys.argv[1]  # /mnt/recordings
+BASE_PATH = sys.argv[1]
+MIN_AGE_SECONDS = float(sys.argv[2])
+ACTIVE_FILES = {os.path.abspath(path) for path in sys.argv[3:]}
 
-
-for gate_dir in os.scandir(BASE_PATH):
-    for device_dir in os.scandir(f"{BASE_PATH}/{gate_dir.name}"):
-        recordings = [
-            r
-            for r in os.listdir(f"{BASE_PATH}/{gate_dir.name}/{device_dir.name}")
-            if r.startswith(".")
-        ]
-        recordings.sort()
-        if len(recordings) < 2:
+for directory, _, filenames in os.walk(BASE_PATH):
+    for filename in sorted(filenames):
+        if not (filename.startswith(".") and filename.endswith("_raw.mp4")):
             continue
 
-        path = f"{BASE_PATH}/{gate_dir.name}/{device_dir.name}/{recordings[-2]}"
-        finalized_path = path.replace("_raw.mp4", "_finalized.mp4")
-        p = subprocess.Popen(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                path,
-                "-c",
-                "copy",
-                "-strict",
-                "-2",
-                finalized_path,
-            ],
+        path = os.path.join(directory, filename)
+        if os.path.abspath(path) in ACTIVE_FILES:
+            continue
+        try:
+            if time.time() - os.stat(path).st_mtime < MIN_AGE_SECONDS:
+                continue
+        except FileNotFoundError:
+            continue
+
+        stem = filename[: -len("_raw.mp4")]
+        finalized_path = os.path.join(directory, stem + "_finalized.mp4")
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", path, "-c", "copy", "-strict", "-2", finalized_path],
+            check=False,
         )
-        return_code = p.wait()
-        if return_code > 0:
+        if result.returncode != 0:
             continue
 
+        clean_path = os.path.join(directory, stem[1:] + ".mp4")
+        os.replace(finalized_path, clean_path)
         os.remove(path)
-        os.rename(
-            finalized_path,
-            finalized_path.replace("/.", "/").replace("_finalized.mp4", ".mp4"),
-        )
-
-print("done")

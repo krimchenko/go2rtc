@@ -1,5 +1,6 @@
 record:
-  basePath: /mnt/recordings
+  basePath: '/mnt/recordings/{{.YEAR}}/{{.MONTH}}/{{.DAY}}/{{.ID}}'
+  filename: 'raw.mp4'
   numSegments: 5
   segmentDuration: 10s
   timezone: Asia/Novosibirsk
