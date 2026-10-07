@@ -95,3 +95,14 @@ log:
 ```
 
 Modules: `api`, `streams`, `rtsp`, `webrtc`, `mp4`, `hls`, `mjpeg`, `hass`, `homekit`, `onvif`, `rtmp`, `webtorrent`, `wyoming`, `echo`, `exec`, `expr`, `ffmpeg`, `wyze`, `xiaomi`.
+
+## Event templates
+
+`event.url` and `event.body` (for POST requests) use Go `text/template` fields `{{.IP}}`, `{{.EVENT}}`, `{{.TIME}}`, and `{{.NAME}}`. `TIME` uses the `YYYY-MM-DD HH:MM:SS` format. Values in the URL are query escaped; values in the body are inserted unchanged.
+
+```yaml
+event:
+  url: 'http://localhost:9000/event?event={{.EVENT}}&name={{.NAME}}'
+  method: POST
+  body: 'event={{.EVENT}}, name={{.NAME}}'
+```
