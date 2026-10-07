@@ -23,6 +23,8 @@ func Init() {
 	if finalizeScriptPath, ok := cfg.Record["finalizeScriptPath"].(string); ok && finalizeScriptPath != "" {
 		c.AddFunc(fmt.Sprintf("@every %s", segmentDuration), record.FFmpegFinalizeRecordings)
 	}
-	c.AddFunc("* */5 * * * *", record.RemoveDanglingRecodings)
+	if numSegments, ok := cfg.Record["numSegments"].(int); ok && numSegments > 0 {
+		c.AddFunc("* */5 * * * *", record.RemoveDanglingRecodings)
+	}
 	c.Start()
 }
