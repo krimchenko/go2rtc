@@ -1,18 +1,24 @@
 package app
 
 import (
-	"github.com/rs/zerolog"
 	"net/http"
 	"net/url"
 	"strings"
+	"text/template"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 var log zerolog.Logger
-var eventUrl string
+var eventURLTemplate *template.Template
+var eventBodyTemplate *template.Template
 var method string
 var BearerToken string
-var body string
+
+type eventData struct {
+	IP, EVENT, TIME, NAME string
+}
 
 func initEventer() {
 	var cfg struct {
@@ -33,35 +39,56 @@ func initEventer() {
 		return
 	}
 
-	eventUrl = cfg.Mod.Url
-	method = cfg.Mod.Method
-	body = cfg.Mod.Body
-	BearerToken = cfg.Mod.BearerToken
 	log = GetLogger("event")
+	var err error
+	eventURLTemplate, err = template.New("event.url").Parse(cfg.Mod.Url)
+	if err != nil {
+		log.Error().Err(err).Msg("invalid event.url template")
+		return
+	}
+	if cfg.Mod.Method == "POST" {
+		eventBodyTemplate, err = template.New("event.body").Parse(cfg.Mod.Body)
+		if err != nil {
+			log.Error().Err(err).Msg("invalid event.body template")
+			eventURLTemplate = nil
+			return
+		}
+	}
+	method = cfg.Mod.Method
+	BearerToken = cfg.Mod.BearerToken
 }
 
 func RecordEvent(ts time.Time, event, name, ip, token string) {
-	if eventUrl != "" {
+	if eventURLTemplate != nil {
 
 		log.Debug().Msgf("[event] %s %s %s", event, name, ip)
 
-		reqUrl := strings.ReplaceAll(eventUrl, "%ip", url.QueryEscape(ip))
-		reqUrl = strings.ReplaceAll(reqUrl, "%event", url.QueryEscape(event))
-		reqUrl = strings.ReplaceAll(reqUrl, "%time", url.QueryEscape(ts.Format(time.DateTime)))
-		reqUrl = strings.ReplaceAll(reqUrl, "%name", url.QueryEscape(name))
+		data := eventData{ip, event, ts.Format(time.DateTime), name}
+		urlData := eventData{
+			url.QueryEscape(data.IP),
+			url.QueryEscape(data.EVENT),
+			url.QueryEscape(data.TIME),
+			url.QueryEscape(data.NAME),
+		}
+		var reqURL strings.Builder
+		if err := eventURLTemplate.Execute(&reqURL, urlData); err != nil {
+			log.Error().Err(err).Msg("failed to render event.url template")
+			return
+		}
 
 		var req *http.Request
 		var err error
 
 		if method == "POST" {
-			reqBody := strings.ReplaceAll(body, "%ip", ip)
-			reqBody = strings.ReplaceAll(reqBody, "%event", event)
-			reqBody = strings.ReplaceAll(reqBody, "%time", ts.Format(time.DateTime))
-			reqBody = strings.ReplaceAll(reqBody, "%name", name)
+			var reqBody strings.Builder
+			if err := eventBodyTemplate.Execute(&reqBody, data); err != nil {
+				log.Error().Err(err).Msg("failed to render event.body template")
+				return
+			}
 
-			req, err = http.NewRequest(method, reqUrl, strings.NewReader(reqBody))
+			req, err = http.NewRequest(method, reqURL.String(), strings.NewReader(reqBody.String()))
 		} else {
-			req, err = http.NewRequest(method, reqUrl, nil)
+			req, err = http.NewRequest(method, reqURL.String(), nil)
 		}
 
 		if err != nil {
