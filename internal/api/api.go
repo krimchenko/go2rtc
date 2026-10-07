@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
+	"text/template"
 	"time"
 
 	"github.com/AlexxIT/go2rtc/internal/app"
@@ -27,6 +29,7 @@ func Init() {
 			JWTUrl     string `yaml:"jwt_url"`
 			JWTMethod  string `yaml:"jwt_method"`
 			JWTBody    string `yaml:"jwt_body"`
+			LocalAuth  bool   `yaml:"local_auth"`
 			BasePath   string `yaml:"base_path"`
 			StaticDir  string `yaml:"static_dir"`
 			Origin     string `yaml:"origin"`
@@ -34,6 +37,8 @@ func Init() {
 			TLSCert    string `yaml:"tls_cert"`
 			TLSKey     string `yaml:"tls_key"`
 			UnixListen string `yaml:"unix_listen"`
+
+			AllowPaths []string `yaml:"allow_paths"`
 		} `yaml:"api"`
 	}
 
@@ -47,6 +52,7 @@ func Init() {
 		return
 	}
 
+	allowPaths = cfg.Mod.AllowPaths
 	basePath = cfg.Mod.BasePath
 	log = app.GetLogger("api")
 
@@ -65,7 +71,7 @@ func Init() {
 	}
 
 	if cfg.Mod.Username != "" {
-		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, Handler) // 2nd
+		Handler = middlewareAuth(cfg.Mod.Username, cfg.Mod.Password, cfg.Mod.LocalAuth, Handler) // 2nd
 	} else if cfg.Mod.JWTUrl != "" {
 		Handler = jwtAuth(cfg.Mod.JWTUrl, Handler, cfg.Mod.JWTMethod, cfg.Mod.JWTBody)
 	}
@@ -158,6 +164,10 @@ func HandleFunc(pattern string, handler http.HandlerFunc) {
 	if len(pattern) == 0 || pattern[0] != '/' {
 		pattern = basePath + "/" + pattern
 	}
+	if allowPaths != nil && !slices.Contains(allowPaths, pattern) {
+		log.Trace().Str("path", pattern).Msg("[api] ignore path not in allow_paths")
+		return
+	}
 	log.Trace().Str("path", pattern).Msg("[api] register path")
 	http.HandleFunc(pattern, handler)
 }
@@ -191,6 +201,7 @@ func Response(w http.ResponseWriter, body any, contentType string) {
 
 const StreamNotFound = "stream not found"
 
+var allowPaths []string
 var basePath string
 var log zerolog.Logger
 
@@ -201,9 +212,13 @@ func middlewareLog(next http.Handler) http.Handler {
 	})
 }
 
-func middlewareAuth(username, password string, next http.Handler) http.Handler {
+func isLoopback(remoteAddr string) bool {
+	return strings.HasPrefix(remoteAddr, "127.") || strings.HasPrefix(remoteAddr, "[::1]") || remoteAddr == "@"
+}
+
+func middlewareAuth(username, password string, localAuth bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
+		if localAuth || !isLoopback(r.RemoteAddr) {
 			user, pass, ok := r.BasicAuth()
 			if !ok || user != username || pass != password {
 				w.Header().Set("Www-Authenticate", `Basic realm="go2rtc"`)
@@ -217,22 +232,43 @@ func middlewareAuth(username, password string, next http.Handler) http.Handler {
 }
 
 func jwtAuth(jwt_url string, next http.Handler, method, body string) http.Handler {
+	type templateData struct {
+		JWT string
+	}
+
+	urlTemplate, err := template.New("jwt_url").Parse(jwt_url)
+	if err != nil {
+		log.Fatal().Err(err).Msg("invalid api.jwt_url template")
+	}
+	bodyTemplate, err := template.New("jwt_body").Parse(body)
+	if err != nil {
+		log.Fatal().Err(err).Msg("invalid api.jwt_body template")
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msgf("[auth] %s %s %s", r.Method, r.URL, r.RemoteAddr)
-		if !strings.HasPrefix(r.RemoteAddr, "-127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
+		if !strings.HasPrefix(r.RemoteAddr, "127.") && !strings.HasPrefix(r.RemoteAddr, "[::1]") && r.RemoteAddr != "@" {
 			reqToken := app.GetAuthToken(r)
 			if len(reqToken) > 5 {
 
-				jwt_url := strings.ReplaceAll(jwt_url, "%jwt", url.QueryEscape(reqToken))
+				var requestURL strings.Builder
+				if err := urlTemplate.Execute(&requestURL, templateData{JWT: url.QueryEscape(reqToken)}); err != nil {
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
 
 				var resp *http.Response
 				var err error
 
 				if method == "POST" {
-					body := strings.ReplaceAll(body, "%jwt", reqToken)
-					resp, err = http.Post(jwt_url, "application/json", strings.NewReader(body))
+					var requestBody strings.Builder
+					if err := bodyTemplate.Execute(&requestBody, templateData{JWT: reqToken}); err != nil {
+						http.Error(w, "Unauthorized", http.StatusUnauthorized)
+						return
+					}
+					resp, err = http.Post(requestURL.String(), "application/json", strings.NewReader(requestBody.String()))
 				} else {
-					resp, err = http.Get(jwt_url)
+					resp, err = http.Get(requestURL.String())
 				}
 
 				if err != nil {

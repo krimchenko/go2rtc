@@ -20,7 +20,8 @@ func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 		srcName = name
 	}
 
-	stream := streams.GetOrPatch(tr.Request.URL.Query())
+	stream, _ := streams.GetOrPatch(tr.Request.URL.Query())
+
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}
@@ -55,7 +56,7 @@ func handlerWSMSE(tr *ws.Transport, msg *ws.Message) error {
 }
 
 func handlerWSMP4(tr *ws.Transport, msg *ws.Message) error {
-	stream := streams.GetOrPatch(tr.Request.URL.Query())
+	stream, _ := streams.GetOrPatch(tr.Request.URL.Query())
 	if stream == nil {
 		return errors.New(api.StreamNotFound)
 	}
