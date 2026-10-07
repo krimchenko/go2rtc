@@ -14,11 +14,13 @@ import (
 	"github.com/AlexxIT/go2rtc/internal/streams"
 	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/AlexxIT/go2rtc/pkg/mp4"
+	"github.com/AlexxIT/go2rtc/pkg/mpegts"
 )
 
 const dateFormat = "2006-01-02_15_04_05"
 
 var mp4MagicNumber = []byte{0, 0, 0, 28, 102, 116, 121, 112}
+var tsHeader = []byte{0x47, 0x40, 0x00, 0x10}
 
 type Segments struct {
 	segmentDuration time.Duration
@@ -38,6 +40,8 @@ type Segments struct {
 	stream     *streams.Stream
 	medias     []*core.Media
 	cons       *mp4.Consumer
+	tsCons     *mpegts.Consumer
+	ts         bool
 }
 
 func NewSegments(
@@ -77,9 +81,11 @@ func NewSegments(
 	if err != nil {
 		return nil, err
 	}
-	if _, err := segments.filenameFor(time.Now().In(filenameTZ)); err != nil {
+	segmentFilename, err := segments.filenameFor(time.Now().In(filenameTZ))
+	if err != nil {
 		return nil, err
 	}
+	segments.ts = strings.HasSuffix(segmentFilename, ".ts")
 	err = os.MkdirAll(path, 0750)
 	if err != nil {
 		return nil, err
@@ -91,7 +97,7 @@ func NewSegments(
 func (s *Segments) Write(b []byte) (n int, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if bytes.HasPrefix(b, mp4MagicNumber) {
+	if s.ts && bytes.HasPrefix(b, tsHeader) || !s.ts && bytes.HasPrefix(b, mp4MagicNumber) {
 		s.switchFile()
 	}
 	return s.files[s.current].Write(b)
@@ -107,10 +113,17 @@ func (s *Segments) Record() {
 		time.Sleep(30 * time.Second)
 	}
 
-	s.cons = mp4.NewConsumer(s.medias)
+	var cons core.Consumer
+	if s.ts {
+		s.tsCons = mpegts.NewConsumer()
+		cons = s.tsCons
+	} else {
+		s.cons = mp4.NewConsumer(s.medias)
+		cons = s.cons
+	}
 
 	for {
-		err := s.stream.AddConsumer(s.cons)
+		err := s.stream.AddConsumer(cons)
 		if err == nil {
 			break
 		}
@@ -118,7 +131,11 @@ func (s *Segments) Record() {
 		time.Sleep(30 * time.Second)
 	}
 	go func() {
-		_, _ = s.cons.WriteTo(s) // blocks
+		if s.ts {
+			_, _ = s.tsCons.WriteTo(s) // blocks
+		} else {
+			_, _ = s.cons.WriteTo(s) // blocks
+		}
 	}()
 
 	s.scheduleSwitch()
@@ -153,6 +170,9 @@ func (s *Segments) prepareNextFile() error {
 	finalName, err := s.filenameFor(now)
 	if err != nil {
 		return err
+	}
+	if strings.HasSuffix(finalName, ".ts") != s.ts {
+		return fmt.Errorf("record.filename extension changed: %q", finalName)
 	}
 	newFile, err := s.openNextFile(path, finalName)
 	if err != nil {
@@ -192,7 +212,7 @@ func (s *Segments) filenameFor(now time.Time) (string, error) {
 	}
 	filename := name.String()
 	if filename == "" || strings.ContainsAny(filename, `/\`) {
-		return "", fmt.Errorf("record.filename must be an mp4 file name: %q", filename)
+		return "", fmt.Errorf("record.filename must be an mp4 or ts file name: %q", filename)
 	}
 	return filename, nil
 }
@@ -201,20 +221,27 @@ func (s *Segments) openNextFile(path, filename string) (*os.File, error) {
 	finalizeMu.Lock()
 	defer finalizeMu.Unlock()
 
-	stem := strings.TrimSuffix(filename, ".mp4")
+	ext := ".mp4"
+	if s.ts {
+		ext = ".ts"
+	}
+	stem := strings.TrimSuffix(filename, ext)
 	key := filepath.Join(path, stem)
 	for number := s.nameCounters[key]; ; number++ {
 		candidate := stem
 		if number > 0 {
 			candidate = fmt.Sprintf("%s_%d", stem, number)
 		}
-		finalPath := filepath.Join(path, candidate+".mp4")
+		finalPath := filepath.Join(path, candidate+ext)
 		if _, err := os.Stat(finalPath); err == nil {
 			continue
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}
 		rawPath := filepath.Join(path, candidate)
+		if s.ts {
+			rawPath = finalPath
+		}
 		file, err := os.OpenFile(rawPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 		if errors.Is(err, os.ErrExist) {
 			continue
@@ -255,6 +282,12 @@ func (s *Segments) scheduleSwitch() {
 			log.Error().Err(err).Msg("failed to open new segment file")
 			continue
 		}
-		s.cons.ResetMuxer() // trigger the muxer to send mp4 magic number
+		if s.ts {
+			if err := s.tsCons.WriteHeader(); err != nil {
+				log.Error().Err(err).Msg("failed to write segment header")
+			}
+		} else {
+			s.cons.ResetMuxer() // trigger the muxer to send mp4 magic number
+		}
 	}
 }
